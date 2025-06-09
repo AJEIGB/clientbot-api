@@ -4,39 +4,41 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from dotenv import load_dotenv
 import os
 from typing import List
 
-# Load environment variables
-load_dotenv()
+# Only load .env locally (optional for Render)
+if os.getenv("RENDER") != "true":
+    from dotenv import load_dotenv
+    load_dotenv()
 
+# Get database URL from environment
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not set in the .env file")
+    raise RuntimeError("DATABASE_URL is not set in the environment")
 
-# Set up database
+# Set up SQLAlchemy engine and session
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Define the database model
+# Define database model
 class MessageDB(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), nullable=False)
     content = Column(Text, nullable=False)
 
-# Create the table
+# Create the table (optional in production)
 Base.metadata.create_all(bind=engine)
 
-# FastAPI app instance
+# Initialize FastAPI app
 app = FastAPI()
 
-# Enable CORS
+# Enable CORS (adjust origins in production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Update with frontend origin in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,7 +74,7 @@ class MessageOut(BaseModel):
 def read_root():
     return {"message": "Hello from FastAPI + MySQL!"}
 
-# Endpoint to send message
+# Endpoint to send a message
 @app.post("/send", response_model=MessageResponse)
 def send_message(msg: Message, db: Session = Depends(get_db)):
     try:
@@ -85,7 +87,7 @@ def send_message(msg: Message, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Endpoint to get all messages
+# Endpoint to retrieve all messages
 @app.get("/messages", response_model=List[MessageOut])
 def get_messages(db: Session = Depends(get_db)):
     return db.query(MessageDB).all()
